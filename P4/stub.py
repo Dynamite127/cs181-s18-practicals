@@ -80,7 +80,7 @@ if __name__ == '__main__':
 	hist = []
 
 	# Run games. 
-	run_games(agent, hist, 20, 10)
+	run_games(agent, hist, 200, 10)
 
 	# Save history. 
 	np.save('hist',np.array(hist))
