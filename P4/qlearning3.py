@@ -3,14 +3,15 @@ import numpy as np
 import numpy.random as npr
 
 from SwingyMonkey import SwingyMonkey
-learning_rate = .1
 discount_factor = 0.9
 screen_width  = 600
-binsize = 50
+width_binsize = 120
 screen_height = 400
-vstates = 7
+height_binsize = 80
+vstates = 5
 velocity_binsize = 20
 num_actions = 2
+epsilon = 0.001
 
 class Learner(object):
     '''
@@ -22,15 +23,16 @@ class Learner(object):
         self.last_action = None
         self.last_reward = None
         # we initialize the Q matrix for Q learning
-        self.Q = np.zeros((num_actions, screen_width/binsize + 1,screen_height/binsize + 1, vstates))
-            # we count the number of times each state has been explored so that we can update epsilon to 0. intuitively, if we are perfectly learned, we do not need any more exploration.
+        self.Q = np.zeros((num_actions, screen_width/width_binsize + 1,screen_height/height_binsize + 1, screen_height/height_binsize + 1, vstates))
+        # we count the number of times each state has been explored so that we can update epsilon to 0. intuitively, if we are perfectly learned, we do not need any more exploration.
+        self.trials = np.zeros((num_actions, screen_width/width_binsize + 1,screen_height/height_binsize + 1, screen_height/height_binsize + 1, vstates))
 
     def reset(self):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
         
-    def random_action(self, p):
+    def exploration(self, p):
         return int(npr.rand() < p)
 
     def action_callback(self, state):
@@ -38,28 +40,30 @@ class Learner(object):
         Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.
         '''
-        d_gap = state['tree']['dist'] / binsize
-        v_gap = (state['tree']['top']-state['monkey']['top']) / binsize
+        d_gap = state['tree']['dist'] / width_binsize
+        v_gap = (state['tree']['top']-state['monkey']['top']) / height_binsize
+        position = state['monkey']['top'] / height_binsize
         vel = state['monkey']['vel'] / velocity_binsize
-        if vel < 0:
-            vel = max(vel, -3)
-        else:
-            vel = min(vel, 3)
-        action = self.random_action(.5)
+        if np.abs(vel) > 2:
+            vel = 2 * np.sign(vel)
+        action = self.exploration(.1)
         if self.last_action != None:
-            last_d_gap = self.last_state['tree']['dist'] / binsize
-            last_v_gap = (self.last_state['tree']['top']-self.last_state['monkey']['top']) / binsize
+            last_d_gap = self.last_state['tree']['dist'] / width_binsize
+            last_v_gap = (self.last_state['tree']['top'] - self.last_state['monkey']['top']) / height_binsize
+            last_position = self.last_state['monkey']['top'] / height_binsize
             last_vel = self.last_state['monkey']['vel'] / velocity_binsize
-            if last_vel < 0:
-                last_vel = max(last_vel, -3)
-            else:
-                last_vel = min(last_vel, 3)
-            action = int(self.Q[1][d_gap,v_gap,vel] > self.Q[0][d_gap,v_gap,vel])
-            max_Q = self.Q[action][d_gap, v_gap, vel]
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += learning_rate*(self.last_reward + discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            if np.abs(last_vel) > 2:
+                last_vel = 2 * np.sign(last_vel)
+            max_Q = np.max(self.Q[:,d_gap,v_gap,vel])
+            new_epsilon = epsilon / max(self.trials[action][d_gap, v_gap, position, vel], 1)
+            if (npr.rand() > new_epsilon):
+                action = int(self.Q[1][d_gap,v_gap,position,vel] > self.Q[0][d_gap,v_gap,position,vel])
+            eta = 1 / self.trials[self.last_action][last_d_gap, last_v_gap, last_position, last_vel]
+            self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel] += eta*(self.last_reward + discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel])
         
         self.last_action = action
         self.last_state = state
+        self.trials[action][d_gap, v_gap, position, vel] += 1
         return action
 
     def reward_callback(self, reward):
@@ -67,8 +71,7 @@ class Learner(object):
 
         self.last_reward = reward
 
-
-def run_games(learner, hist, iters = 1000, t_len = 100):
+def run_games(learner, hist, iters = 10000, t_len = 100):
     '''
     Driver function to simulate learning by having the agent play a sequence of games.
     '''
@@ -108,5 +111,4 @@ if __name__ == '__main__':
 
 	# Save history. 
 	np.save('hist',np.array(hist))
-
 
