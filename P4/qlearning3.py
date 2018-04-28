@@ -5,9 +5,9 @@ import numpy.random as npr
 from SwingyMonkey import SwingyMonkey
 discount_factor = 0.9
 screen_width  = 600
-width_binsize = 120
+width_binsize = 40
 screen_height = 400
-height_binsize = 80
+height_binsize = 25
 vstates = 5
 velocity_binsize = 20
 num_actions = 2
@@ -107,7 +107,7 @@ if __name__ == '__main__':
 	hist = []
 
 	# Run games. 
-	run_games(agent, hist, 1000, 1)
+	run_games(agent, hist, 10000, 1)
 
 	# Save history. 
 	np.save('hist',np.array(hist))
