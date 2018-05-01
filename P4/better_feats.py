@@ -3,6 +3,11 @@ import numpy as np
 import numpy.random as npr
 
 from SwingyMonkey import SwingyMonkey
+
+
+import matplotlib
+import matplotlib.pyplot as plt
+
 eta = 0.1
 discount_factor = 0.9
 screen_width  = 600
@@ -98,15 +103,54 @@ def run_games(learner, hist, iters = 10000, t_len = 100):
 
 if __name__ == '__main__':
 
-	# Select agent.
-	agent = Learner()
+    # Select agent.
+    agent = Learner()
 
-	# Empty list to save history.
-	hist = []
+    # Empty list to save history.
+    hist = []
 
-	# Run games. 
-	run_games(agent, hist, 10000, 1)
+    # Run games. 
+    num_iters = 20
+    time_step = 2
+    try:
+        run_games(agent, hist, num_iters, time_step)
+    except:
+        pass
 
-	# Save history. 
-	np.save('hist',np.array(hist))
+    # Calculate Running Avg
+    avgs_lst = []
+    for i in range(0, len(hist)):
+        n = i + 1
+        if i == 0:
+            avgs_lst.append(
+                round(hist[i], 2)
+            )
+        else:
+            avgs_lst.append(
+                round(1.0 * avgs_lst[i - 1] * ((n - 1) / n ) + 1.0 * (hist[i] / n), 2)
+            )
+        
+
+    fig, axes = plt.subplots(3, 1, figsize = (10, 8))
+
+    axes[0].plot(range(len(hist)), hist, 'o')
+    axes[0].set_title('Scores Over Time\nBetter States 1')
+    axes[0].set_xlabel('Num Iterations')
+    axes[0].set_ylabel('Score')
+
+    axes[1].hist(hist)
+    axes[1].set_title('Score Distribution\nBetter States 1')
+    axes[1].set_xlabel('Times Score Achieved')
+
+    axes[2].plot(range(1, len(avgs_lst) + 1), avgs_lst)
+    axes[2].set_title('Running Avg of Scores Over Time')
+    axes[2].set_xlabel('Num Iterations')
+    axes[2].set_ylabel('Avg Score')
+
+    plt.tight_layout()
+    plt.savefig('graphs/better_states_1_graphs.png')
+    plt.clf()
+
+    # Save history. 
+    np.save('hist',np.array(hist))
 
