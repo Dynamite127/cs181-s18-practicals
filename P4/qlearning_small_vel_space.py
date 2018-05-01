@@ -7,14 +7,14 @@ from SwingyMonkey import SwingyMonkey
 import matplotlib
 import matplotlib.pyplot as plt
 
-learning_rate = .1
 discount_factor = 0.9
 screen_width  = 600
 binsize = 50
 screen_height = 400
-vstates = 7
-velocity_binsize = 20
+vstates = 6
+# velocity_binsize = 8
 num_actions = 2
+epsilon = 0.1
 
 class Learner(object):
     '''
@@ -29,7 +29,16 @@ class Learner(object):
         # we initialize the Q matrix for Q learning
         self.Q = np.zeros(
             (int(num_actions), 
-             int(screen_width/binsize + 1),
+             int(screen_width/binsize + 1), 
+             int(screen_height/binsize + 1), 
+             int(vstates))
+        )
+        
+        # we count the number of times each state has been explored so that we can update epsilon to 0. 
+        # intuitively, if we are perfectly learned, we do not need any more exploration.
+        self.trials = np.zeros(
+            (int(num_actions), 
+             int(screen_width/binsize + 1), 
              int(screen_height/binsize + 1), 
              int(vstates))
         )
@@ -39,43 +48,74 @@ class Learner(object):
         self.last_action = None
         self.last_reward = None
         
-    def random_action(self, p):
+    def exploration(self, p):
         return int(npr.rand() < p)
+
+    def discretize_velocity(self, velocity):
+        # If velocity is less than -30, assign velocity to lowest state
+        if velocity <= -30:
+            return 0
+        elif -29 <= velocity <= -15:
+            return 1
+        elif -14 <= velocity <= 1:
+            return 2
+        elif 2 <= velocity <= 16:
+            return 3
+        elif 17 <= velocity <= 29:
+            return 4
+        elif velocity >= 30:
+            return 5
+        else:
+            assert(0)
 
     def action_callback(self, state):
         '''
         Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.
         '''
+        # Get data from current state
         d_gap = int(state['tree']['dist'] / binsize)
         v_gap = int((state['tree']['top'] - state['monkey']['top']) / binsize)
-        vel = int(state['monkey']['vel'] / velocity_binsize)
+        # vel = int(state['monkey']['vel'] / velocity_binsize)
+        vel = self.discretize_velocity(state['monkey']['vel'])
         
-        if vel < 0:
-            vel = int(max(vel, -3))
+        # # If velocity too high or low, place into appropriate bin
+        # if np.abs(vel) > 8:
+        #     vel = int(8 * np.sign(vel))
         
-        else:
-            vel = int(min(vel, 3))
-        
-        action = self.random_action(.5)
+        action = self.exploration(.5)
         
         if self.last_action != None:
             last_d_gap = int(self.last_state['tree']['dist'] / binsize)
             last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / binsize)
-            last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            # last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            last_vel = self.discretize_velocity(self.last_state['monkey']['vel'])
             
-            if last_vel < 0:
-                last_vel = max(last_vel, -3)
+            # # Compress velocity if needed
+            # if np.abs(last_vel) > 8:
+            #     last_vel = int(8 * np.sign(last_vel))
             
-            else:
-                last_vel = min(last_vel, 3)
+            # Max Q value over all actions for this particular distance from tree, vertical dist from tree,
+            # velocity
+            max_Q = np.max(self.Q[:, d_gap, v_gap, vel])
+            new_epsilon = epsilon / max(self.trials[action][d_gap, v_gap, vel], 1)
             
-            action = int(self.Q[1][d_gap,v_gap,vel] > self.Q[0][d_gap,v_gap,vel])
-            max_Q = self.Q[action][d_gap, v_gap, vel]
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += learning_rate*(self.last_reward + discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            if npr.rand() > new_epsilon:
+                if self.Q[1][d_gap, v_gap, vel] > self.Q[0][d_gap, v_gap, vel]:
+                    action = 1
+                else: 
+                    action = 0
+
+            # Learning rate decreases as number of times we execute the last action in the last state
+            # increases
+            eta = 1 / self.trials[self.last_action][last_d_gap, last_v_gap, last_vel]
+            q_adjust = eta * (self.last_reward + discount_factor * max_Q - self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += q_adjust
         
         self.last_action = action
         self.last_state = state
+        self.trials[action][d_gap, v_gap, vel] += 1
+
         return action
 
     def reward_callback(self, reward):
@@ -83,8 +123,7 @@ class Learner(object):
 
         self.last_reward = reward
 
-
-def run_games(learner, hist, iters = 1000, t_len = 100):
+def run_games(learner, hist, iters = 10000, t_len = 100):
     '''
     Driver function to simulate learning by having the agent play a sequence of games.
     '''
@@ -107,6 +146,7 @@ def run_games(learner, hist, iters = 1000, t_len = 100):
 
         # Reset the state of the learner.
         learner.reset()
+
         
     return
 
@@ -130,19 +170,18 @@ if __name__ == '__main__':
     fig, axes = plt.subplots(2, 1, figsize = (10, 8))
 
     axes[0].plot(range(len(hist)), hist, 'o')
-    axes[0].set_title('Scores Over Time\nQlearning 1')
+    axes[0].set_title('Scores Over Time\nSmall Velocity Space')
     axes[0].set_xlabel('Num Iterations')
     axes[0].set_ylabel('Score')
 
     axes[1].hist(hist)
-    axes[1].set_title('Score Distribution\nQlearning 1')
+    axes[1].set_title('Score Distribution\nSmall Velocity Space')
     axes[1].set_xlabel('Times Score Achieved')
 
     plt.tight_layout()
-    plt.savefig('qlearning1_graphs.png')
+    plt.savefig('small_vel_space_graphs.png')
     plt.clf()
 
     # Save history. 
     np.save('hist',np.array(hist))
-
 

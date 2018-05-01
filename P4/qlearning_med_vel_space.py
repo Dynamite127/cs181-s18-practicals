@@ -11,10 +11,10 @@ discount_factor = 0.9
 screen_width  = 600
 binsize = 50
 screen_height = 400
-vstates = 5
-velocity_binsize = 20
+vstates = 17
+# velocity_binsize = 8
 num_actions = 2
-epsilon = 0.001
+epsilon = 0.1
 
 class Learner(object):
     '''
@@ -51,6 +51,45 @@ class Learner(object):
     def exploration(self, p):
         return int(npr.rand() < p)
 
+    def discretize_velocity(self, velocity):
+        # If velocity is less than -30, assign velocity to lowest state
+        if velocity <= -30:
+            return 0
+        elif -29 <= velocity <= -26:
+            return 1
+        elif -25 <= velocity <= -22:
+            return 2
+        elif -21 <= velocity <= -18:
+            return 3
+        elif -17 <= velocity <= -14:
+            return 4
+        elif -13 <= velocity <= -10:
+            return 5
+        elif -9 <= velocity <= -6:
+            return 6
+        elif -5 <= velocity <= -2:
+            return 7
+        elif -1 <= velocity <= 2:
+            return 8
+        elif 3 <= velocity <= 6:
+            return 9
+        elif 7 <= velocity <= 10:
+            return 10
+        elif 11 <= velocity <= 14:
+            return 11
+        elif 15 <= velocity <= 18:
+            return 12
+        elif 19 <= velocity <= 22:
+            return 13
+        elif 23 <= velocity <= 25:
+            return 14
+        elif 26 <= velocity <= 29:
+            return 15
+        elif velocity >= 30:
+            return 16
+        else:
+            assert(0)
+
     def action_callback(self, state):
         '''
         Implement this function to learn things and take actions.
@@ -59,22 +98,24 @@ class Learner(object):
         # Get data from current state
         d_gap = int(state['tree']['dist'] / binsize)
         v_gap = int((state['tree']['top'] - state['monkey']['top']) / binsize)
-        vel = int(state['monkey']['vel'] / velocity_binsize)
+        # vel = int(state['monkey']['vel'] / velocity_binsize)
+        vel = self.discretize_velocity(state['monkey']['vel'])
         
-        # If velocity too high or low, place into appropriate bin
-        if np.abs(vel) > 2:
-            vel = int(2 * np.sign(vel))
+        # # If velocity too high or low, place into appropriate bin
+        # if np.abs(vel) > 8:
+        #     vel = int(8 * np.sign(vel))
         
         action = self.exploration(.5)
         
         if self.last_action != None:
             last_d_gap = int(self.last_state['tree']['dist'] / binsize)
             last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / binsize)
-            last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            # last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            last_vel = self.discretize_velocity(self.last_state['monkey']['vel'])
             
-            # Compress velocity if needed
-            if np.abs(last_vel) > 2:
-                last_vel = int(2 * np.sign(last_vel))
+            # # Compress velocity if needed
+            # if np.abs(last_vel) > 8:
+            #     last_vel = int(8 * np.sign(last_vel))
             
             # Max Q value over all actions for this particular distance from tree, vertical dist from tree,
             # velocity
@@ -151,16 +192,16 @@ if __name__ == '__main__':
     fig, axes = plt.subplots(2, 1, figsize = (10, 8))
 
     axes[0].plot(range(len(hist)), hist, 'o')
-    axes[0].set_title('Scores Over Time\nQlearning 2')
+    axes[0].set_title('Scores Over Time\nMed Velocity Space')
     axes[0].set_xlabel('Num Iterations')
     axes[0].set_ylabel('Score')
 
     axes[1].hist(hist)
-    axes[1].set_title('Score Distribution\nQlearning 2')
+    axes[1].set_title('Score Distribution\nMed Velocity Space')
     axes[1].set_xlabel('Times Score Achieved')
 
     plt.tight_layout()
-    plt.savefig('qlearning2_graphs.png')
+    plt.savefig('med_vel_space_graphs.png')
     plt.clf()
 
     # Save history. 
