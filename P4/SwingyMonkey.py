@@ -8,23 +8,17 @@ class SwingyMonkey:
     def __init__(self, sound=True, text=None, action_callback=None, 
                  reward_callback=None, tick_length=100):
         """Constructor for the SwingyMonkey class.
-
         Possible Keyword Arguments:
-
         sound: Boolean variable on whether or not to play sounds.
                Defaults to True.
-
         text: Optional string to display in the upper right corner of
               the screen.
-
         action_callback: Function handle for determining actions.
                          Takes a dictionary as an argument.  The
                          dictionary contains the current state of the
                          game.
-
         reward_callback: Function handle for receiving rewards. Takes
                          a scalar argument which is the reward.
-
         tick_length: Time in milliseconds between game steps.
                      Defaults to 100ms, but you might want to make it
                      smaller for training."""
@@ -99,10 +93,14 @@ class SwingyMonkey:
                       'bot': <screen height of bottom of monkey> }}'''                      
 
         # Find the next closest tree.
+        next_tree = None
         for tree in self.trees:
-            if tree['x']+290 > self.monkey_left:
+            if tree['x']+290 >= self.monkey_left:
                 next_tree = tree.copy()
                 break
+
+        if not next_tree:
+            next_tree = self.trees[0].copy()
 
         # Construct the state dictionary to return.
         return { 'score': self.score,
