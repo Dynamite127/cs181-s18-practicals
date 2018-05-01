@@ -7,15 +7,6 @@ from SwingyMonkey import SwingyMonkey
 import matplotlib
 import matplotlib.pyplot as plt
 
-learning_rate = .1
-discount_factor = 0.9
-screen_width  = 600
-binsize = 50
-screen_height = 400
-vstates = 7
-velocity_binsize = 20
-num_actions = 2
-
 class Learner(object):
     '''
     This agent jumps randomly.
@@ -25,13 +16,22 @@ class Learner(object):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
+
+        self.learning_rate = .1
+        self.discount_factor = 0.9
+        self.screen_width  = 600
+        self.binsize = 50
+        self.screen_height = 400
+        self.vstates = 7
+        self.velocity_binsize = 20
+        self.num_actions = 2
         
         # we initialize the Q matrix for Q learning
         self.Q = np.zeros(
-            (int(num_actions), 
-             int(screen_width/binsize + 1),
-             int(screen_height/binsize + 1), 
-             int(vstates))
+            (int(self.num_actions), 
+             int(self.screen_width/self.binsize + 1),
+             int(self.screen_height/self.binsize + 1), 
+             int(self.vstates))
         )
 
     def reset(self):
@@ -47,9 +47,9 @@ class Learner(object):
         Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.
         '''
-        d_gap = int(state['tree']['dist'] / binsize)
-        v_gap = int((state['tree']['top'] - state['monkey']['top']) / binsize)
-        vel = int(state['monkey']['vel'] / velocity_binsize)
+        d_gap = int(state['tree']['dist'] / self.binsize)
+        v_gap = int((state['tree']['top'] - state['monkey']['top']) / self.binsize)
+        vel = int(state['monkey']['vel'] / self.velocity_binsize)
         
         if vel < 0:
             vel = int(max(vel, -3))
@@ -60,9 +60,9 @@ class Learner(object):
         action = self.random_action(.5)
         
         if self.last_action != None:
-            last_d_gap = int(self.last_state['tree']['dist'] / binsize)
-            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / binsize)
-            last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            last_d_gap = int(self.last_state['tree']['dist'] / self.binsize)
+            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / self.binsize)
+            last_vel = int(self.last_state['monkey']['vel'] / self.velocity_binsize)
             
             if last_vel < 0:
                 last_vel = max(last_vel, -3)
@@ -72,7 +72,7 @@ class Learner(object):
             
             action = int(self.Q[1][d_gap,v_gap,vel] > self.Q[0][d_gap,v_gap,vel])
             max_Q = self.Q[action][d_gap, v_gap, vel]
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += learning_rate*(self.last_reward + discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += self.learning_rate*(self.last_reward + self.discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
         
         self.last_action = action
         self.last_state = state
@@ -104,6 +104,10 @@ def run_games(learner, hist, iters = 1000, t_len = 100):
         # Save score history.
         hist.append(swing.score)
         print('{}: {}'.format((ii + 1),learner.last_state['score']))
+        # avgs = []
+        # avg = np.avg(hist)
+        # print('avg': np.avg(hist))
+        # avgs.append(avg)
 
         # Reset the state of the learner.
         learner.reset()
@@ -120,14 +124,28 @@ if __name__ == '__main__':
     hist = []
 
     # Run games. 
-    num_iters = 2000
+    num_iters = 1000
     time_step = 2
     try:
         run_games(agent, hist, num_iters, time_step)
     except:
         pass
 
-    fig, axes = plt.subplots(2, 1, figsize = (10, 8))
+    # Calculate Running Avg
+    avgs_lst = []
+    for i in range(0, len(hist)):
+        n = i + 1
+        if i == 0:
+            avgs_lst.append(
+                round(hist[i], 2)
+            )
+        else:
+            avgs_lst.append(
+                round(1.0 * avgs_lst[i - 1] * ((n - 1) / n ) + 1.0 * (hist[i] / n), 2)
+            )
+        
+
+    fig, axes = plt.subplots(3, 1, figsize = (10, 8))
 
     axes[0].plot(range(len(hist)), hist, 'o')
     axes[0].set_title('Scores Over Time\nQlearning 1')
@@ -138,8 +156,13 @@ if __name__ == '__main__':
     axes[1].set_title('Score Distribution\nQlearning 1')
     axes[1].set_xlabel('Times Score Achieved')
 
+    axes[2].plot(range(1, len(avgs_lst) + 1), avgs_lst)
+    axes[2].set_title('Running Avg of Scores Over Time')
+    axes[2].set_xlabel('Num Iterations')
+    axes[2].set_ylabel('Avg Score')
+
     plt.tight_layout()
-    plt.savefig('qlearning1_graphs.png')
+    plt.savefig('graphs/qlearning1_graphs.png')
     plt.clf()
 
     # Save history. 

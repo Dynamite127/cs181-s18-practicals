@@ -7,16 +7,6 @@ from SwingyMonkey import SwingyMonkey
 import matplotlib
 import matplotlib.pyplot as plt
 
-discount_factor = 0.9
-screen_width  = 600
-width_binsize = 40
-screen_height = 400
-height_binsize = 25
-vstates = 5
-velocity_binsize = 20
-num_actions = 2
-epsilon = 0.001
-
 class Learner(object):
     '''
     This agent jumps randomly.
@@ -26,24 +16,28 @@ class Learner(object):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
+
+        self.discount_factor = 0.9
+        self.screen_width  = 600
+        self.width_binsize = 40
+        self.screen_height = 400
+        self.height_binsize = 25
+        self.vstates = 5
+        self.velocity_binsize = 20
+        self.num_actions = 2
+        self.epsilon = 0.001
         
         # we initialize the Q matrix for Q learning
         self.Q = np.zeros(
-            (int(num_actions), 
-             int(screen_width/width_binsize + 1),
-             int(screen_height/height_binsize + 1), 
-             int(screen_height/height_binsize + 1), 
-             int(vstates))
+            (int(self.num_actions), 
+             int(self.screen_width / self.width_binsize + 1),
+             int(self.screen_height / self.height_binsize + 1), 
+             int(self.screen_height / self.height_binsize + 1), 
+             int(self.vstates))
         )
         
         # we count the number of times each state has been explored so that we can update epsilon to 0. intuitively, if we are perfectly learned, we do not need any more exploration.
-        self.trials = np.zeros(
-            (int(num_actions), 
-             int(screen_width/width_binsize + 1),
-             int(screen_height/height_binsize + 1), 
-             int(screen_height/height_binsize + 1), 
-             int(vstates))
-        )
+        self.trials = np.zeros(self.Q.shape)
 
     def reset(self):
         self.last_state  = None
@@ -53,37 +47,52 @@ class Learner(object):
     def exploration(self, p):
         return int(npr.rand() < p)
 
+    def discretize_velocity(self, state):
+        vel = int(state['monkey']['vel'] / self.velocity_binsize)
+        if vel <= -2:
+            vel = 0
+        elif vel == -1:
+            vel = 1
+        elif vel == 0:
+            vel = 2
+        elif vel == 1:
+            vel = 3
+        elif vel >= 2:
+            vel = 4
+        else:
+            assert(0)
+        return vel
+
     def action_callback(self, state):
         '''
         Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.
         '''
-        d_gap = int(state['tree']['dist'] / width_binsize)
-        v_gap = int((state['tree']['top']-state['monkey']['top']) / height_binsize)
-        position = int(state['monkey']['top'] / height_binsize)
-        vel = int(state['monkey']['vel'] / velocity_binsize)
+        d_gap = int(state['tree']['dist'] / self.width_binsize)
+        v_gap = int((state['tree']['top'] - state['monkey']['top']) / self.height_binsize)
+        position = int(state['monkey']['top'] / self.height_binsize)
+        vel = self.discretize_velocity(state)
         
-        if np.abs(vel) > 2:
-            vel = int(2 * np.sign(vel))
+        # if np.abs(vel) > 2:
+        #     vel = int(2 * np.sign(vel))
+        
         action = int(self.exploration(.1))
         
         if self.last_action != None:
-            last_d_gap = int(self.last_state['tree']['dist'] / width_binsize)
-            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / height_binsize)
-            last_position = int(self.last_state['monkey']['top'] / height_binsize)
-            last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
+            last_d_gap = int(self.last_state['tree']['dist'] / self.width_binsize)
+            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / self.height_binsize)
+            last_position = int(self.last_state['monkey']['top'] / self.height_binsize)
+            last_vel = self.discretize_velocity(self.last_state)
             
-            if np.abs(last_vel) > 2:
-                last_vel = int(2 * np.sign(last_vel))
+            max_Q = np.max(self.Q[:,d_gap, v_gap, vel])
+            new_epsilon = self.epsilon / max(self.trials[action][d_gap, v_gap, position, vel], 1)
             
-            max_Q = np.max(self.Q[:,d_gap,v_gap,vel])
-            new_epsilon = epsilon / max(self.trials[action][d_gap, v_gap, position, vel], 1)
-            
-            if (npr.rand() > new_epsilon):
+            if npr.rand() > new_epsilon:
                 action = int(self.Q[1][d_gap,v_gap,position,vel] > self.Q[0][d_gap,v_gap,position,vel])
             
             eta = 1 / self.trials[self.last_action][last_d_gap, last_v_gap, last_position, last_vel]
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel] += eta*(self.last_reward + discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel])
+            q_update = eta * (self.last_reward + self.discount_factor * max_Q - self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel])
+            self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel] += q_update
         
         self.last_action = action
         self.last_state = state
@@ -132,14 +141,29 @@ if __name__ == '__main__':
     hist = []
 
     # Run games. 
-    num_iters = 2000
+    num_iters = 1000
     time_step = 2
-    try:
-        run_games(agent, hist, num_iters, time_step)
-    except:
-        pass
+    # try:
+    #     run_games(agent, hist, num_iters, time_step)
+    # except:
+    #     pass
+    run_games(agent, hist, num_iters, time_step)
 
-    fig, axes = plt.subplots(2, 1, figsize = (10, 8))
+    # Calculate Running Avg
+    avgs_lst = []
+    for i in range(0, len(hist)):
+        n = i + 1
+        if i == 0:
+            avgs_lst.append(
+                round(hist[i], 2)
+            )
+        else:
+            avgs_lst.append(
+                round(1.0 * avgs_lst[i - 1] * ((n - 1) / n ) + 1.0 * (hist[i] / n), 2)
+            )
+        
+
+    fig, axes = plt.subplots(3, 1, figsize = (10, 8))
 
     axes[0].plot(range(len(hist)), hist, 'o')
     axes[0].set_title('Scores Over Time\nQlearning 3')
@@ -150,10 +174,14 @@ if __name__ == '__main__':
     axes[1].set_title('Score Distribution\nQlearning 3')
     axes[1].set_xlabel('Times Score Achieved')
 
+    axes[2].plot(range(1, len(avgs_lst) + 1), avgs_lst)
+    axes[2].set_title('Running Avg of Scores Over Time')
+    axes[2].set_xlabel('Num Iterations')
+    axes[2].set_ylabel('Avg Score')
+
     plt.tight_layout()
-    plt.savefig('qlearning3_graphs.png')
+    plt.savefig('graphs/qlearning3_graphs.png')
     plt.clf()
 
     # Save history. 
     np.save('hist',np.array(hist))
-

@@ -14,7 +14,7 @@ screen_height = 400
 vstates = 17
 # velocity_binsize = 8
 num_actions = 2
-epsilon = 0.1
+epsilon = 0.001
 
 class Learner(object):
     '''
@@ -182,7 +182,7 @@ if __name__ == '__main__':
     hist = []
 
     # Run games. 
-    num_iters = 2000
+    num_iters = 1000
     time_step = 2
     try:
         run_games(agent, hist, num_iters, time_step)

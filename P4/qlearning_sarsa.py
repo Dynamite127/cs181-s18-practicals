@@ -11,8 +11,8 @@ discount_factor = 0.9
 screen_width  = 600
 binsize = 50
 screen_height = 400
-vstates = 6
-# velocity_binsize = 8
+vstates = 5
+velocity_binsize = 20
 num_actions = 2
 epsilon = 0.001
 
@@ -36,12 +36,7 @@ class Learner(object):
         
         # we count the number of times each state has been explored so that we can update epsilon to 0. 
         # intuitively, if we are perfectly learned, we do not need any more exploration.
-        self.trials = np.zeros(
-            (int(num_actions), 
-             int(screen_width/binsize + 1), 
-             int(screen_height/binsize + 1), 
-             int(vstates))
-        )
+        self.trials = np.zeros(self.Q.shape)
 
     def reset(self):
         self.last_state  = None
@@ -51,23 +46,6 @@ class Learner(object):
     def exploration(self, p):
         return int(npr.rand() < p)
 
-    def discretize_velocity(self, velocity):
-        # If velocity is less than -30, assign velocity to lowest state
-        if velocity <= -30:
-            return 0
-        elif -29 <= velocity <= -15:
-            return 1
-        elif -14 <= velocity <= 1:
-            return 2
-        elif 2 <= velocity <= 16:
-            return 3
-        elif 17 <= velocity <= 29:
-            return 4
-        elif velocity >= 30:
-            return 5
-        else:
-            assert(0)
-
     def action_callback(self, state):
         '''
         Implement this function to learn things and take actions.
@@ -76,24 +54,22 @@ class Learner(object):
         # Get data from current state
         d_gap = int(state['tree']['dist'] / binsize)
         v_gap = int((state['tree']['top'] - state['monkey']['top']) / binsize)
-        # vel = int(state['monkey']['vel'] / velocity_binsize)
-        vel = self.discretize_velocity(state['monkey']['vel'])
+        vel = int(state['monkey']['vel'] / velocity_binsize)
         
-        # # If velocity too high or low, place into appropriate bin
-        # if np.abs(vel) > 8:
-        #     vel = int(8 * np.sign(vel))
+        # If velocity too high or low, place into appropriate bin
+        if np.abs(vel) > 2:
+            vel = int(2 * np.sign(vel))
         
         action = self.exploration(.5)
         
         if self.last_action != None:
             last_d_gap = int(self.last_state['tree']['dist'] / binsize)
             last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / binsize)
-            # last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
-            last_vel = self.discretize_velocity(self.last_state['monkey']['vel'])
+            last_vel = int(self.last_state['monkey']['vel'] / velocity_binsize)
             
-            # # Compress velocity if needed
-            # if np.abs(last_vel) > 8:
-            #     last_vel = int(8 * np.sign(last_vel))
+            # Compress velocity if needed
+            if np.abs(last_vel) > 2:
+                last_vel = int(2 * np.sign(last_vel))
             
             # Max Q value over all actions for this particular distance from tree, vertical dist from tree,
             # velocity
@@ -109,7 +85,7 @@ class Learner(object):
             # Learning rate decreases as number of times we execute the last action in the last state
             # increases
             eta = 1 / self.trials[self.last_action][last_d_gap, last_v_gap, last_vel]
-            q_adjust = eta * (self.last_reward + discount_factor * max_Q - self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            q_adjust = eta * (self.last_reward + discount_factor * self.Q[action][d_gap, v_gap, vel] - self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
             self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += q_adjust
         
         self.last_action = action
@@ -167,19 +143,38 @@ if __name__ == '__main__':
     except:
         pass
 
-    fig, axes = plt.subplots(2, 1, figsize = (10, 8))
+    # Calculate Running Avg
+    avgs_lst = []
+    for i in range(0, len(hist)):
+        n = i + 1
+        if i == 0:
+            avgs_lst.append(
+                round(hist[i], 2)
+            )
+        else:
+            avgs_lst.append(
+                round(1.0 * avgs_lst[i - 1] * ((n - 1) / n ) + 1.0 * (hist[i] / n), 2)
+            )
+        
+
+    fig, axes = plt.subplots(3, 1, figsize = (10, 8))
 
     axes[0].plot(range(len(hist)), hist, 'o')
-    axes[0].set_title('Scores Over Time\nSmall Velocity Space')
+    axes[0].set_title('Scores Over Time\nSARSA')
     axes[0].set_xlabel('Num Iterations')
     axes[0].set_ylabel('Score')
 
     axes[1].hist(hist)
-    axes[1].set_title('Score Distribution\nSmall Velocity Space')
+    axes[1].set_title('Score Distribution\nSARSA')
     axes[1].set_xlabel('Times Score Achieved')
 
+    axes[2].plot(range(1, len(avgs_lst) + 1), avgs_lst)
+    axes[2].set_title('Running Avg of Scores Over Time')
+    axes[2].set_xlabel('Num Iterations')
+    axes[2].set_ylabel('Avg Score')
+
     plt.tight_layout()
-    plt.savefig('small_vel_space_graphs.png')
+    plt.savefig('graphs/sarsa_graphs.png')
     plt.clf()
 
     # Save history. 
