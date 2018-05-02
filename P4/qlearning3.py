@@ -22,8 +22,8 @@ class Learner(object):
         self.width_binsize = 40
         self.screen_height = 400
         self.height_binsize = 25
-        self.vstates = 5
         self.velocity_binsize = 20
+        self.vstates = 5
         self.num_actions = 2
         self.epsilon = 0.001
         
@@ -62,41 +62,43 @@ class Learner(object):
         else:
             assert(0)
         return vel
+    
+    def get_feats(self, state):
+        d_gap = int(state['tree']['dist'] / self.width_binsize)
+        v_gap = int((state['tree']['top'] - state['monkey']['top']) / self.height_binsize)
+        position = int(state['monkey']['top'] / self.height_binsize)
+        vel = self.discretize_velocity(state) 
+        return tuple([d_gap, v_gap, position, vel])
 
     def action_callback(self, state):
         '''
         Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.
         '''
-        d_gap = int(state['tree']['dist'] / self.width_binsize)
-        v_gap = int((state['tree']['top'] - state['monkey']['top']) / self.height_binsize)
-        position = int(state['monkey']['top'] / self.height_binsize)
-        vel = self.discretize_velocity(state)
-        
-        # if np.abs(vel) > 2:
-        #     vel = int(2 * np.sign(vel))
-        
+        feats = self.get_feats(state)
         action = int(self.exploration(.1))
         
         if self.last_action != None:
-            last_d_gap = int(self.last_state['tree']['dist'] / self.width_binsize)
-            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / self.height_binsize)
-            last_position = int(self.last_state['monkey']['top'] / self.height_binsize)
-            last_vel = self.discretize_velocity(self.last_state)
+            last_feats = self.get_feats(self.last_state)
             
-            max_Q = np.max(self.Q[:,d_gap, v_gap, vel])
-            new_epsilon = self.epsilon / max(self.trials[action][d_gap, v_gap, position, vel], 1)
+            # Max Q value over all actions for this particular distance from tree, vertical dist from tree,
+            # velocity
+            new_epsilon = self.epsilon / max(self.trials[action][feats], 1)
             
             if npr.rand() > new_epsilon:
-                action = int(self.Q[1][d_gap,v_gap,position,vel] > self.Q[0][d_gap,v_gap,position,vel])
-            
-            eta = 1 / self.trials[self.last_action][last_d_gap, last_v_gap, last_position, last_vel]
-            q_update = eta * (self.last_reward + self.discount_factor * max_Q - self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel])
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_position, last_vel] += q_update
+                action = int(self.Q[1][feats] > self.Q[0][feats])
+
+            max_Q = self.Q[action][feats]
+
+            # Learning rate decreases as number of times we execute the last action in the last state
+            # increases
+            eta = 1 / self.trials[self.last_action][last_feats]
+            q_adjust = eta * (self.last_reward + self.discount_factor * max_Q - self.Q[self.last_action][last_feats])
+            self.Q[self.last_action][last_feats] += q_adjust
         
         self.last_action = action
         self.last_state = state
-        self.trials[action][d_gap, v_gap, position, vel] += 1
+        self.trials[action][feats] += 1
         
         return action
 
@@ -180,7 +182,7 @@ if __name__ == '__main__':
     axes[2].set_ylabel('Avg Score')
 
     plt.tight_layout()
-    plt.savefig('graphs/qlearning3_graphs.png')
+    plt.savefig('qlearning3_graphs.png')
     plt.clf()
 
     # Save history. 

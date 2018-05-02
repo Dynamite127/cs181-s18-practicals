@@ -22,8 +22,10 @@ class Learner(object):
         self.screen_width  = 600
         self.binsize = 50
         self.screen_height = 400
-        self.vstates = 7
+        self.min_vel = -40
+        self.max_vel = 40
         self.velocity_binsize = 20
+        self.vstates = 7
         self.num_actions = 2
         
         # we initialize the Q matrix for Q learning
@@ -41,12 +43,8 @@ class Learner(object):
         
     def random_action(self, p):
         return int(npr.rand() < p)
-
-    def action_callback(self, state):
-        '''
-        Implement this function to learn things and take actions.
-        Return 0 if you don't want to jump and 1 if you do.
-        '''
+    
+    def get_feats(self, state):
         d_gap = int(state['tree']['dist'] / self.binsize)
         v_gap = int((state['tree']['top'] - state['monkey']['top']) / self.binsize)
         vel = int(state['monkey']['vel'] / self.velocity_binsize)
@@ -56,23 +54,23 @@ class Learner(object):
         
         else:
             vel = int(min(vel, 3))
+        return tuple([d_gap, v_gap, vel])
+
+    def action_callback(self, state):
+        '''
+        Implement this function to learn things and take actions.
+        Return 0 if you don't want to jump and 1 if you do.
+        '''
+      
+        feats = self.get_feats(state)
         
         action = self.random_action(.5)
         
         if self.last_action != None:
-            last_d_gap = int(self.last_state['tree']['dist'] / self.binsize)
-            last_v_gap = int((self.last_state['tree']['top'] - self.last_state['monkey']['top']) / self.binsize)
-            last_vel = int(self.last_state['monkey']['vel'] / self.velocity_binsize)
-            
-            if last_vel < 0:
-                last_vel = max(last_vel, -3)
-            
-            else:
-                last_vel = min(last_vel, 3)
-            
-            action = int(self.Q[1][d_gap,v_gap,vel] > self.Q[0][d_gap,v_gap,vel])
-            max_Q = self.Q[action][d_gap, v_gap, vel]
-            self.Q[self.last_action][last_d_gap, last_v_gap, last_vel] += self.learning_rate*(self.last_reward + self.discount_factor * max_Q- self.Q[self.last_action][last_d_gap, last_v_gap, last_vel])
+            last_feats = self.get_feats(self.last_state)
+            action = int(self.Q[1][feats] > self.Q[0][feats])
+            max_Q = self.Q[action][feats]
+            self.Q[self.last_action][last_feats] += self.learning_rate*(self.last_reward + self.discount_factor * max_Q- self.Q[self.last_action][last_feats])
         
         self.last_action = action
         self.last_state = state
@@ -126,10 +124,7 @@ if __name__ == '__main__':
     # Run games. 
     num_iters = 1000
     time_step = 2
-    try:
-        run_games(agent, hist, num_iters, time_step)
-    except:
-        pass
+    run_games(agent, hist, num_iters, time_step)
 
     # Calculate Running Avg
     avgs_lst = []
@@ -162,7 +157,7 @@ if __name__ == '__main__':
     axes[2].set_ylabel('Avg Score')
 
     plt.tight_layout()
-    plt.savefig('graphs/qlearning1_graphs.png')
+    plt.savefig('qlearning1_graphs.png')
     plt.clf()
 
     # Save history. 
